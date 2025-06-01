@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Andrew's Finnish Vocabulary Masker</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <style>
+    body {
+      font-family: 'Inter', sans-serif; /* Using Inter font */
+      margin: 0;
+      padding: 20px;
+      background-color: #f0f2f5; /* Slightly softer background */
+      color: #333;
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 800px;
+      margin: 20px auto;
+      background-color: #fff;
+      padding: 25px;
+      border-radius: 12px; /* More rounded corners */
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1); /* Softer shadow */
+    }
+    h1, h2 {
+      color: #2c3e50; /* Darker, more modern blue */
+      text-align: center;
+    }
+    h1 {
+      margin-bottom: 25px;
+    }
+    h2 {
+      margin-top: 30px;
+      border-bottom: 1px solid #e0e0e0;
+      padding-bottom: 10px;
+    }
+    .controls-area {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+    .input-group {
+      display: flex;
+      gap: 10px;
+    }
+    #wordInput {
+      flex-grow: 1;
+      padding: 12px;
+      border: 1px solid #ced4da;
+      border-radius: 6px;
+      font-size: 1em;
+    }
+    button {
+      padding: 12px 18px;
+      background-color: #007bff; /* Primary blue */
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background-color 0.2s ease-in-out;
+      font-size: 0.95em;
+    }
+    button:hover {
+      background-color: #0056b3; /* Darker blue on hover */
+    }
+    #toggleMaskMode {
+      background-color: #6c757d; /* Secondary gray */
+    }
+    #toggleMaskMode:hover {
+      background-color: #5a6268;
+    }
+    #maskKey {
+      background-color: #e9ecef; /* Light gray background for key */
+      padding: 15px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      font-size: 0.9em;
+    }
+    #maskKey h3 {
+      margin-top: 0;
+      color: #495057;
+    }
+    #maskKey p {
+      margin-bottom: 5px;
+    }
+    #maskKey code {
+      background-color: #fff;
+      padding: 2px 5px;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+    #maskDisplay {
+      font-family: monospace;
+      font-size: 1.6em; /* Larger for clear visibility */
+      margin-top: 10px;
+      margin-bottom: 20px;
+      padding: 12px;
+      border: 1px solid #e0e0e0;
+      background-color: #f8f9fa; /* Very light background */
+      min-height: 1.8em; /* Prevents layout shifts */
+      border-radius: 6px;
+      word-break: break-all; /* Ensure long masks wrap */
+    }
+    #storedResultsTableContainer table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+    #storedResultsTableContainer th, #storedResultsTableContainer td {
+      border: 1px solid #dee2e6; /* Lighter border */
+      padding: 10px;
+      text-align: left;
+    }
+    #storedResultsTableContainer th {
+      background-color: #e9ecef; /* Header background */
+      font-weight: 600;
+    }
+    #storedResultsTableContainer tr:nth-child(even) {
+      background-color: #f8f9fa;
+    }
+    .table-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 15px;
+    }
+    #clearButton, #copyCsvButton {
+      background-color: #dc3545; /* Red for clear */
+    }
+    #clearButton:hover, #copyCsvButton:hover {
+      background-color: #c82333;
+    }
+    #copyCsvButton {
+      background-color: #28a745; /* Green for copy */
+    }
+    #copyCsvButton:hover {
+      background-color: #218838;
+    }
+    .no-results {
+      color: #6c757d; /* Muted color for no results */
+      font-style: italic;
+      text-align: center;
+      padding: 10px;
+    }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Andrew's Finnish Vocabulary Masker</h1>
+      <p>(All masks are stored in your browser's <a href="https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage">local storage</a>. Nothing you do here leaves your computer.)</p>
+
+      <div id="maskKey">
+      </div>
+
+      <div class="controls-area">
+        <button id="toggleMaskMode">Switch to Letter Mask</button>
+        <div class="input-group">
+          <input type="text" id="wordInput" placeholder="Enter Finnish word or phrase">
+          <button id="storeButton">Store</button>
+        </div>
+      </div>
+
+      <div id="maskDisplay">&nbsp;</div>
+
+      <h2>Stored Masks</h2>
+      <div id="storedResultsTableContainer">
+        <p class="no-results">No masks stored yet.</p>
+      </div>
+      <div class="table-actions">
+        <button id="copyCsvButton">Download to CSV</button>
+        <button id="clearButton">Clear Stored Masks</button>
+      </div>
+    </div>
+
+    <script>
+    // DOM Elements
+    const wordInput = document.getElementById('wordInput');
+    const storeButton = document.getElementById('storeButton');
+    const maskDisplay = document.getElementById('maskDisplay');
+    const storedResultsTableContainer = document.getElementById('storedResultsTableContainer');
+    const clearButton = document.getElementById('clearButton');
+    const toggleMaskModeButton = document.getElementById('toggleMaskMode');
+    const maskKeyDiv = document.getElementById('maskKey');
+    const copyCsvButton = document.getElementById('copyCsvButton');
+
+    // Constants for local storage and mask modes
+    const localStorageKey = 'andrewFinnishMasks_v2'; // Changed key for new structure
+    const MASK_MODE_PUNCTUATION = 'punctuation';
+    const MASK_MODE_LETTER = 'letter';
+
+    // Vowel and consonant definitions (Finnish alphabet)
+    const lowVowels = ['a', 'o', 'u'];
+    const midVowels = ['i', 'e'];
+    const highVowels = ['ä', 'ö', 'y'];
+    // Basic Finnish consonants for simplicity. More could be added.
+    const consonants = "bcdfghjklmnpqrstvwxz".split(''); 
+    // For checking if a character is a letter (works for Finnish specific chars too)
+    const finnishAlphabetRegex = /^[a-zäöå]$/i;
+
+
+    // Application State
+    let currentMaskMode = MASK_MODE_PUNCTUATION;
+
+    // --- Mask Generation Logic ---
+    function generateMask(word, mode) {
+      if (!word) return '';
+      let maskedWord = '';
+      for (let char of word) {
+        const lowerChar = char.toLowerCase();
+        if (finnishAlphabetRegex.test(lowerChar)) { // Only mask letters
+          if (mode === MASK_MODE_PUNCTUATION) {
+            if (lowVowels.includes(lowerChar)) maskedWord += '.';
+              else if (midVowels.includes(lowerChar)) maskedWord += '~';
+                else if (highVowels.includes(lowerChar)) maskedWord += '^';
+                  else if (consonants.includes(lowerChar)) maskedWord += '_';
+                    else maskedWord += char; // Should not happen if finnishAlphabetRegex is comprehensive
+          } else if (mode === MASK_MODE_LETTER) {
+            if (lowVowels.includes(lowerChar)) maskedWord += 'U';
+              else if (midVowels.includes(lowerChar)) maskedWord += 'E';
+                else if (highVowels.includes(lowerChar)) maskedWord += 'Ä';
+                  else if (consonants.includes(lowerChar)) maskedWord += 'x';
+                    else maskedWord += char; // Should not happen
+          }
+        } else {
+          maskedWord += char; // Pass through non-alphabetic characters
+        }
+      }
+      return maskedWord;
+    }
+
+    // --- UI Update Functions ---
+    function updateDynamicMaskDisplay() {
+      const word = wordInput.value;
+      const mask = generateMask(word, currentMaskMode);
+      maskDisplay.textContent = mask || '\u00A0'; // Non-breaking space for empty
+    }
+
+    function updateKeyDisplay() {
+      const exampleWord = "Hän on hyvin utelias!";
+      let keyHTML = `<h3>Current Mode: ${currentMaskMode === MASK_MODE_PUNCTUATION ? 'Punctuation Mask' : 'Letter Mask'}</h3>`;
+
+      if (currentMaskMode === MASK_MODE_PUNCTUATION) {
+        keyHTML += `
+<details>
+<p>Consonants → <code>_</code> (e.g., k → _) </p>
+<p>Low Vowels (a, o, u) → <code>.</code> (e.g., a → .)</p>
+<p>Mid Vowels (e, i) → <code>~</code> (e.g., e → ~)</p>
+<p>High Vowels (ä, ö, y) → <code>^</code> (e.g., ä → ^)</p>
+<p>Other characters (spaces, numbers, !, ?, etc.) pass through unchanged.</p>
+<p>Example: "<code>${exampleWord}</code>" → "<code>${generateMask(exampleWord, MASK_MODE_PUNCTUATION)}</code>"</p>
+</details>
+`;
+      } else { // MASK_MODE_LETTER
+        keyHTML += `
+<details>
+<p>Consonants → <code>x</code> (e.g., k → x)</p>
+<p>Low Vowels (a, o, u) → <code>U</code> (e.g., a → U)</p>
+<p>Mid Vowels (e, i) → <code>E</code> (e.g., e → E)</p>
+<p>High Vowels (ä, ö, y) → <code>Ä</code> (e.g., ä → Ä)</p>
+<p>Other characters (spaces, numbers, !, ?, etc.) pass through unchanged.</p>
+<p>Example: "<code>${exampleWord}</code>" → "<code>${generateMask(exampleWord, MASK_MODE_LETTER)}</code>"</p>
+</details>
+`;
+      }
+      maskKeyDiv.innerHTML = keyHTML;
+    }
+
+    function renderStoredMasks() {
+      let storedData = [];
+      try {
+        storedData = JSON.parse(localStorage.getItem(localStorageKey)) || [];
+      } catch (e) {
+        console.error("Error parsing stored data:", e);
+        storedData = []; // Reset if corrupted
+        localStorage.setItem(localStorageKey, JSON.stringify([])); // Clear corrupted data
+      }
+
+      if (storedData.length === 0) {
+        storedResultsTableContainer.innerHTML = '<p class="no-results">No masks stored yet.</p>';
+        return;
+      }
+
+      let tableHTML = '<table><thead><tr><th>Original Word</th><th>Mask</th><th>Mask Type</th><th>Stored On</th></tr></thead><tbody>';
+      for (const item of storedData) {
+        // Sanitize output
+        const originalText = document.createTextNode(item.original || '').textContent;
+        const maskText = document.createTextNode(item.mask || '').textContent;
+        const typeText = document.createTextNode(item.mode || 'N/A').textContent;
+        const dateText = item.timestamp ? new Date(item.timestamp).toLocaleString() : 'N/A';
+        tableHTML += `<tr><td>${originalText}</td><td>${maskText}</td><td>${typeText}</td><td>${dateText}</td></tr>`;
+      }
+      tableHTML += '</tbody></table>';
+      storedResultsTableContainer.innerHTML = tableHTML;
+    }
+
+    // --- Action Functions ---
+    function storeCurrentMask() {
+      const originalWord = wordInput.value; // Don't trim, to preserve spaces if intended
+      if (originalWord.trim() === '') { // Trim only for validation
+        // Optionally provide feedback, e.g., by briefly changing input border color
+        wordInput.style.borderColor = 'red';
+        setTimeout(() => { wordInput.style.borderColor = '#ced4da'; }, 1000);
+        return;
+      }
+
+      const mask = generateMask(originalWord, currentMaskMode);
+      let storedData = [];
+      try {
+        storedData = JSON.parse(localStorage.getItem(localStorageKey)) || [];
+      } catch (e) {
+        console.error("Error parsing stored data before storing:", e);
+        storedData = [];
+      }
+
+      storedData.unshift({ 
+        original: originalWord, 
+        mask: mask, 
+        mode: currentMaskMode, // Store the mode used
+        timestamp: new Date().toISOString() 
+      });
+
+      localStorage.setItem(localStorageKey, JSON.stringify(storedData));
+
+      renderStoredMasks();
+      wordInput.value = ''; 
+      updateDynamicMaskDisplay(); 
+      wordInput.focus();
+    }
+
+    function toggleMask() {
+      if (currentMaskMode === MASK_MODE_PUNCTUATION) {
+        currentMaskMode = MASK_MODE_LETTER;
+        toggleMaskModeButton.textContent = 'Switch to Punctuation Mask';
+      } else {
+        currentMaskMode = MASK_MODE_PUNCTUATION;
+        toggleMaskModeButton.textContent = 'Switch to Letter Mask';
+      }
+      updateKeyDisplay();
+      updateDynamicMaskDisplay(); // Update mask for current input text
+    }
+
+    function clearStoredMasks() {
+      // Using a custom modal for confirmation would be better than confirm()
+      // For now, direct clear.
+      // if (confirm("Are you sure you want to clear all stored masks? This cannot be undone.")) {
+      localStorage.removeItem(localStorageKey);
+      renderStoredMasks();
+      // }
+    }
+
+    function copyStoredMasksAsCsv() {
+      let storedData = [];
+      try {
+        storedData = JSON.parse(localStorage.getItem(localStorageKey)) || [];
+      } catch (e) {
+        console.error("Error parsing stored data for CSV:", e);
+        alert("Could not retrieve data for CSV export due to an error.");
+        return;
+      }
+
+      if (storedData.length === 0) {
+        alert("No data to export.");
+        return;
+      }
+
+      // PapaParse expects an array of objects or an array of arrays.
+      // We'll map our data to ensure consistent field order.
+      const csvData = storedData.map(item => ({
+        "Original Word": item.original,
+        "Mask": item.mask,
+        "Mask Type": item.mode,
+        "Stored On": item.timestamp ? new Date(item.timestamp).toLocaleString() : 'N/A'
+      }));
+
+      const csvString = Papa.unparse(csvData);
+
+      // Create a blob and trigger download
+      const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement("a");
+      if (link.download !== undefined) { // Feature detection
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", "finnish_masks_export.csv");
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else {
+        alert("CSV export is not supported in your browser.");
+      }
+    }
+
+    // --- Event Listeners ---
+    wordInput.addEventListener('input', updateDynamicMaskDisplay);
+    storeButton.addEventListener('click', storeCurrentMask);
+    wordInput.addEventListener('keypress', function(event) {
+      if (event.key === 'Enter') {
+        event.preventDefault(); 
+        storeCurrentMask();
+      }
+    });
+    clearButton.addEventListener('click', clearStoredMasks);
+    toggleMaskModeButton.addEventListener('click', toggleMask);
+    copyCsvButton.addEventListener('click', copyStoredMasksAsCsv);
+
+    // --- Initial Load ---
+    document.addEventListener('DOMContentLoaded', () => {
+      updateKeyDisplay();
+      updateDynamicMaskDisplay(); 
+      renderStoredMasks();
+    });
+    </script>
+    <footer>
+      <h2>What is this for?</h2>
+      <p>This is just a tiny tool to help Finnish language learners who want to generate, say, their own flashcards, hide the words they are practicing with just enough information that they can see the "shape" of the word without actually being able to guess it from context alone. Like all major languages Finnish words frequently have many synonyms, which can be hard to tell from each other if a vocabulary card gives you no additional information whatsoever. I hope you'll find them helpful too!</p>
+      <p>For example, if I ask you for the Finnish word for "again", there are many possibilities. But if I ask you for the Finnish word for "again" with word mask <code>_.._</code> or <code>xUUx</code>, it's much easier to tell I am looking specifically for the word <code>taas</code>, and not e.g. <code>uudelleen</code>.</p>
+      <p>I have used these kinds of masks already for my Anki decks <a href="https://ankiweb.net/shared/info/1149950470">finfreq10k</a> and the earlier <a href="https://ankiweb.net/shared/info/1331009943">finfreq</a> for a few years now, and find them quite helpful.</p>
+      <h3>Check out <a href="http://finbug.xyz/">finbug.xyz</a> for a full listing of all my Finnish language learning tools!</h3>
+    </footer>
+  </body>
+</html>
+
